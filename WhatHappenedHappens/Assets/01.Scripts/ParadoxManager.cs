@@ -116,9 +116,24 @@ public class ParadoxManager : MonoBehaviour
         }
     }
 
+    private IEnumerator ResetObjectsAfterPlayback(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        // Debug.Log("[Paradox] 재생 완료 - 오브젝트 위치 초기화");
+
+        foreach (var box in FindObjectsOfType<Box>())
+            box.ResetPosition();
+
+        foreach (var ball in FindObjectsOfType<Ball>())
+            ball.ResetPosition();
+    }
+
     private void ReplayParadoxes()
     {
         int ghostIndex = 0;
+        float maxDuration = 10f; // 패러독스는 항상 10초간 녹화되므로 고정
+
         foreach (var paradoxEvents in paradoxQueue)
         {
             foreach (var ev in paradoxEvents)
@@ -134,6 +149,9 @@ public class ParadoxManager : MonoBehaviour
             StartCoroutine(ReplayGhostMovement(ghost, ghostData));
             ghostIndex++;
         }
+
+        // 전체 재생 완료 후 초기화 코루틴 실행
+        StartCoroutine(ResetObjectsAfterPlayback(maxDuration));
     }
 
     private IEnumerator DelayedExecute(ParadoxEvent ev)
