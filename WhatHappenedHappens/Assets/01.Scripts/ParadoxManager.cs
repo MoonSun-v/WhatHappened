@@ -10,95 +10,100 @@ public class ParadoxManager : MonoBehaviour
 {
     public static ParadoxManager Instance;
 
+    public GameObject player;
     private bool isRecording = false;
-    private float recordTime = 0f;
-    private float paradoxDuration = 10f;
-
-    private List<ParadoxEvent> recordedEvents = new List<ParadoxEvent>();
-
-    private Dictionary<GameObject, ObjectSnapshot> snapshotBeforeParadox;
+    private float recordingStartTime;
+    private ParadoxData currentParadox;
+    private Queue<ParadoxData> paradoxHistory = new Queue<ParadoxData>();
+    private int maxParadoxCount = 3;
 
     private void Awake()
     {
-        Instance = this;
+        if (Instance == null)
+            Instance = this;
+        else
+            Destroy(gameObject);
     }
 
-    private void Update()
+    void Update()
     {
-        if (Input.GetKeyDown(KeyCode.R))
+        if (Input.GetKeyDown(KeyCode.R) && !isRecording)
         {
-            StartParadox();
-        }
-
-        if (!isRecording) return;
-
-        recordTime += Time.deltaTime;
-        if (recordTime >= paradoxDuration)
-        {
-            EndParadox();
+            StartCoroutine(StartParadox());
         }
     }
 
-    public void StartParadox()
+    public IEnumerator StartParadox()
     {
         isRecording = true;
-        Debug.Log("[Paradox] Paradox 시작");
+        currentParadox = new ParadoxData();
+        recordingStartTime = Time.time;
+        Debug.Log("[Recording Paradox] ----- 페러독스 녹화 시작 -----");
 
-        recordTime = 0f;
-        recordedEvents.Clear();
+        yield return new WaitForSeconds(10f); // 10초간 녹화
 
-        snapshotBeforeParadox = TakeSnapshotOfAll(); // 모든 오브젝트의 상태 스냅샷
-    }
-
-    public void EndParadox()
-    {
         isRecording = false;
-        Debug.Log("[Paradox] Paradox 종료");
 
-        RestoreSnapshot(snapshotBeforeParadox); // 스냅샷 복원
+        // 3개 이상이면 제일 오래된 것 제거
+        if (paradoxHistory.Count >= maxParadoxCount)
+            paradoxHistory.Dequeue();
 
-        StartCoroutine(ReplayEvents());         // 이후 이벤트 재현 시작
-    }
+        paradoxHistory.Enqueue(currentParadox);
+        Debug.Log($"[Recording Paradox] ----- 패러독스 녹화 종료 -----");
 
-    public void RecordEvent(GameObject target, ActionType actionType)
-    {
-        if (isRecording)
+        // 페러독스 이전 상태로 리셋
+        ResetScene();
+
+        // 기록된 모든 패러독스 동시에 재생
+        foreach (var paradox in paradoxHistory)
         {
-            recordedEvents.Add(new ParadoxEvent(recordTime, target, actionType));
-            Debug.Log($"[Paradox] {recordTime:F2}s: {target.name} - {actionType} 이벤트 기록됨");
+            StartCoroutine(ReplayEvents(paradox));
         }
     }
 
-    IEnumerator ReplayEvents()
+    public void RecordEvent(GameObject target, ActionType action)
     {
-        foreach (var ev in recordedEvents.OrderBy(e => e.time))
+        if (!isRecording) return;
+
+        ParadoxEvent e = new ParadoxEvent
         {
-            yield return new WaitForSeconds(ev.time);
-            ev.Execute();
+            target = target,
+            action = action,
+            timeOffset = Time.time - recordingStartTime
+        };
+        currentParadox.recordedEvents.Add(e);
+        Debug.Log($"[Paradox] 기록됨: {action} / {target.name} / {e.timeOffset}초");
+    }
+
+    private void ResetScene()
+    {
+        // 플레이어 위치 초기화
+        GameObject spawn = GameObject.Find("PlayerSpawn");
+        if (spawn != null)
+        {
+            player.transform.position = spawn.transform.position;
+            // Debug.Log($"[Paradox] Player 위치 복원");
+        }
+
+        // 박스 초기 위치로 되돌리기
+        foreach (var box in FindObjectsOfType<Box>())
+        {
+            box.ResetPosition();
+        }
+
+        // 공 초기 위치로 되돌리기
+        foreach (var ball in FindObjectsOfType<Ball>())
+        {
+            ball.ResetPosition();
         }
     }
 
-    private Dictionary<GameObject, ObjectSnapshot> TakeSnapshotOfAll()
+    private IEnumerator ReplayEvents(ParadoxData paradox)
     {
-        var dict = new Dictionary<GameObject, ObjectSnapshot>();
-        foreach (var obj in GameObject.FindObjectsOfType<MonoBehaviour>())
+        foreach (var e in paradox.recordedEvents)
         {
-            if (obj is IParadoxObject paradoxObject)
-            {
-                dict[obj.gameObject] = paradoxObject.CreateSnapshot();
-            }
+            StartCoroutine(e.Play());
         }
-        return dict;
-    }
-
-    private void RestoreSnapshot(Dictionary<GameObject, ObjectSnapshot> snapshot)
-    {
-        foreach (var pair in snapshot)
-        {
-            if (pair.Key.TryGetComponent<IParadoxObject>(out var paradoxObj))
-            {
-                paradoxObj.RestoreSnapshot(pair.Value);
-            }
-        }
+        yield return null;
     }
 }

@@ -3,23 +3,26 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-// [ 패러독스 액션 관리 Enum ]
-public enum ActionType { MoveBox }
+// [ 패러독스 액션 관리 Enum ] : 추가할 액션 여기에 정의해주기 ! 
+public enum ActionType 
+{ 
+    MoveBox,
+    MoveBall
+}
 
 
 // [ 시간 기록 + 이후 자동 실행 이벤트 정의 ]
 // 
 public class ParadoxEvent 
 {
-    public float time;
+    public float timeOffset;
     public GameObject target;
     public ActionType action;
 
-    public ParadoxEvent(float t, GameObject go, ActionType a)
+    public IEnumerator Play()
     {
-        time = t;
-        target = go;
-        action = a;
+        yield return new WaitForSeconds(timeOffset);
+        Execute();
     }
 
     public void Execute()
@@ -28,7 +31,11 @@ public class ParadoxEvent
         {
             case ActionType.MoveBox:
                 target.GetComponent<Box>().MoveRight();
-                Debug.Log($"[Paradox] {time:F2}s: {target.name} - {action} 이벤트 재현됨");
+                Debug.Log($"[Paradox] {timeOffset}초 후 Box가 이동함: {target.name}");
+                break;
+            case ActionType.MoveBall:
+                target.GetComponent<Ball>().MoveUp();
+                Debug.Log($"[Paradox] {timeOffset}초 후 Ball이 이동함: {target.name}");
                 break;
         }
     }
