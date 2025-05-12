@@ -14,7 +14,10 @@ public class Button : MonoBehaviour
             if (box != null)
             {
                 box.MoveRight();
-                ParadoxManager.Instance.RecordEvent(box.gameObject, ActionType.MoveBox);
+
+                float eventTime = Time.time - ParadoxManager.Instance.recordingStartTime;
+                var ev = new ParadoxEvent(eventTime, box.gameObject, ActionType.MoveBox);
+                ParadoxManager.Instance.RecordEvent(ev);
             }
         }
     }

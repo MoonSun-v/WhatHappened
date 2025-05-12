@@ -410,6 +410,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   player: {fileID: 368599810}
+  ghostPlayerPrefab: {fileID: 207015000211300158, guid: 22228c1dc222ca049a43b1e35037bcb2, type: 3}
+  recordingStartTime: 0
+  lastRecordTime: 0
 --- !u!4 &1395728387
 Transform:
   m_ObjectHideFlags: 0

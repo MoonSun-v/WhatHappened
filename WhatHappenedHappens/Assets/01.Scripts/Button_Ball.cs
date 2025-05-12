@@ -12,7 +12,10 @@ public class Button_Ball : MonoBehaviour
             if (ball != null)
             {
                 ball.MoveUp();
-                ParadoxManager.Instance.RecordEvent(ball.gameObject, ActionType.MoveBall);
+
+                float eventTime = Time.time - ParadoxManager.Instance.recordingStartTime;
+                var ev = new ParadoxEvent(eventTime, ball.gameObject, ActionType.MoveBall);
+                ParadoxManager.Instance.RecordEvent(ev);
             }
         }
     }

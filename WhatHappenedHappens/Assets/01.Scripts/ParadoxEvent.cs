@@ -15,14 +15,15 @@ public enum ActionType
 // 
 public class ParadoxEvent 
 {
-    public float timeOffset;
+    public float time;
     public GameObject target;
     public ActionType action;
 
-    public IEnumerator Play()
+    public ParadoxEvent(float time, GameObject target, ActionType action)
     {
-        yield return new WaitForSeconds(timeOffset);
-        Execute();
+        this.time = time;
+        this.target = target;
+        this.action = action;
     }
 
     public void Execute()
@@ -31,11 +32,11 @@ public class ParadoxEvent
         {
             case ActionType.MoveBox:
                 target.GetComponent<Box>().MoveRight();
-                Debug.Log($"[Paradox] {timeOffset}초 후 Box가 이동함: {target.name}");
+                Debug.Log($"[Paradox] 박스 이동 실행 at {time}s");
                 break;
             case ActionType.MoveBall:
                 target.GetComponent<Ball>().MoveUp();
-                Debug.Log($"[Paradox] {timeOffset}초 후 Ball이 이동함: {target.name}");
+                Debug.Log($"[Paradox] 공 이동 실행 at {time}s");
                 break;
         }
     }

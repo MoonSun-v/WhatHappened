@@ -9,15 +9,25 @@ using UnityEngine;
 public class ParadoxManager : MonoBehaviour
 {
     public static ParadoxManager Instance;
-
+    
     public GameObject player;
-    private bool isRecording = false;
-    private float recordingStartTime;
-    private ParadoxData currentParadox;
-    private Queue<ParadoxData> paradoxHistory = new Queue<ParadoxData>();
-    private int maxParadoxCount = 3;
+    public GameObject ghostPlayerPrefab;
 
-    private Vector3 recordedPlayerPosition;
+    private Vector3 playerReturnPosition;
+    private GameObject ghostPlayerInstance;
+
+    private bool isRecording = false;
+    public float recordingStartTime = 0f;
+    public float lastRecordTime = 0f;
+
+    private List<ParadoxEvent> currentRecording = new List<ParadoxEvent>();
+    private List<PlayerMovementRecord> currentPlayerRecording = new List<PlayerMovementRecord>();
+    private List<PlayerMovementRecord> playerReplayData = new List<PlayerMovementRecord>();
+
+    private Queue<List<ParadoxEvent>> paradoxQueue = new Queue<List<ParadoxEvent>>();
+    private Queue<List<PlayerMovementRecord>> ghostQueue = new Queue<List<PlayerMovementRecord>>();
+    private int maxParadox = 3;
+
 
     private void Awake()
     {
@@ -29,59 +39,69 @@ public class ParadoxManager : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.R) && !isRecording)
+        if (Input.GetKeyDown(KeyCode.R))
         {
-            StartCoroutine(StartParadox());
+            StartRecording();
+        }
+
+        if (isRecording)
+        {
+            float elapsed = Time.time - recordingStartTime;
+
+            if (elapsed - lastRecordTime >= 0.1f)
+            {
+                currentPlayerRecording.Add(new PlayerMovementRecord(elapsed, player.transform.position));
+                lastRecordTime = elapsed;
+            }
+
+            if (elapsed >= 10f)
+            {
+                StopRecording();
+            }
         }
     }
 
-    public IEnumerator StartParadox()
+    public void StartRecording()
     {
+        Debug.Log("[Paradox] 녹화 시작");
         isRecording = true;
-        currentParadox = new ParadoxData();
         recordingStartTime = Time.time;
-        recordedPlayerPosition = player.transform.position; // 플레이어 위치 저장 
-        Debug.Log("[Recording Paradox] ----- 페러독스 녹화 시작 -----");
+        lastRecordTime = 0f;
+        currentRecording.Clear();
+        currentPlayerRecording.Clear();
+        playerReturnPosition = player.transform.position;
+    }
 
-        yield return new WaitForSeconds(10f); // 10초간 녹화
-
-        isRecording = false;
-
-        // 3개 이상이면 제일 오래된 것 제거
-        if (paradoxHistory.Count >= maxParadoxCount)
-            paradoxHistory.Dequeue();
-
-        paradoxHistory.Enqueue(currentParadox);
-        Debug.Log($"[Recording Paradox] ----- 패러독스 녹화 종료 -----");
-
-        
-        ResetScene(); // 페러독스 이전 상태로 리셋
-
-        // 기록된 모든 패러독스 동시에 재생
-        foreach (var paradox in paradoxHistory)
+    public void RecordEvent(ParadoxEvent ev)
+    {
+        if (isRecording)
         {
-            StartCoroutine(ReplayEvents(paradox));
+            currentRecording.Add(ev);
+            Debug.Log($"[Paradox] 이벤트 기록됨: {ev.action} at {ev.time}s");
         }
     }
 
-    public void RecordEvent(GameObject target, ActionType action)
+    private void StopRecording()
     {
-        if (!isRecording) return;
+        isRecording = false;
+        Debug.Log("[Paradox] 녹화 종료");
 
-        ParadoxEvent e = new ParadoxEvent
+        if (paradoxQueue.Count >= maxParadox)
         {
-            target = target,
-            action = action,
-            timeOffset = Time.time - recordingStartTime
-        };
-        currentParadox.recordedEvents.Add(e);
-        Debug.Log($"[Paradox] 기록됨: {action} / {target.name} / {e.timeOffset}초");
+            paradoxQueue.Dequeue();
+            ghostQueue.Dequeue();
+        }
+
+        paradoxQueue.Enqueue(new List<ParadoxEvent>(currentRecording));
+        ghostQueue.Enqueue(new List<PlayerMovementRecord>(currentPlayerRecording));
+
+        ResetScene();
+        ReplayParadoxes();
     }
 
     private void ResetScene()
     {
-        // 플레이어 위치 복원 
-        player.transform.position = recordedPlayerPosition;
+        player.transform.position = playerReturnPosition;
 
         // 박스 초기 위치로 되돌리기
         foreach (var box in FindObjectsOfType<Box>())
@@ -96,12 +116,58 @@ public class ParadoxManager : MonoBehaviour
         }
     }
 
-    private IEnumerator ReplayEvents(ParadoxData paradox)
+    private void ReplayParadoxes()
     {
-        foreach (var e in paradox.recordedEvents)
+        int ghostIndex = 0;
+        foreach (var paradoxEvents in paradoxQueue)
         {
-            StartCoroutine(e.Play());
+            foreach (var ev in paradoxEvents)
+            {
+                StartCoroutine(DelayedExecute(ev));
+            }
+
+            // 고스트 생성 및 이동 실행
+            var ghostData = ghostQueue.ToArray()[ghostIndex];
+            GameObject ghost = Instantiate(ghostPlayerPrefab);
+            ghost.name = "GhostPlayer_" + ghostIndex;
+            ghost.transform.position = ghostData[0].position;
+            StartCoroutine(ReplayGhostMovement(ghost, ghostData));
+            ghostIndex++;
         }
-        yield return null;
+    }
+
+    private IEnumerator DelayedExecute(ParadoxEvent ev)
+    {
+        yield return new WaitForSeconds(ev.time);
+        ev.Execute();
+    }
+
+    private IEnumerator ReplayGhostMovement(GameObject ghost, List<PlayerMovementRecord> data)
+    {
+        for (int i = 1; i < data.Count; i++)
+        {
+            float waitTime = data[i].time - data[i - 1].time;
+            Vector3 start = data[i - 1].position;
+            Vector3 end = data[i].position;
+
+            float elapsed = 0f;
+            while (elapsed < waitTime)
+            {
+                if (ghost == null) yield break;
+
+                ghost.transform.position = Vector3.Lerp(start, end, elapsed / waitTime);
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            if (ghost != null)
+                ghost.transform.position = end;
+        }
+
+        if (ghost != null)
+        {
+            Destroy(ghost);
+            // Debug.Log($"[Paradox] 고스트 플레이어 {ghost.name} 파괴됨");
+        }
     }
 }
