@@ -17,6 +17,8 @@ public class ParadoxManager : MonoBehaviour
     private Queue<ParadoxData> paradoxHistory = new Queue<ParadoxData>();
     private int maxParadoxCount = 3;
 
+    private Vector3 recordedPlayerPosition;
+
     private void Awake()
     {
         if (Instance == null)
@@ -38,6 +40,7 @@ public class ParadoxManager : MonoBehaviour
         isRecording = true;
         currentParadox = new ParadoxData();
         recordingStartTime = Time.time;
+        recordedPlayerPosition = player.transform.position; // 플레이어 위치 저장 
         Debug.Log("[Recording Paradox] ----- 페러독스 녹화 시작 -----");
 
         yield return new WaitForSeconds(10f); // 10초간 녹화
@@ -51,8 +54,8 @@ public class ParadoxManager : MonoBehaviour
         paradoxHistory.Enqueue(currentParadox);
         Debug.Log($"[Recording Paradox] ----- 패러독스 녹화 종료 -----");
 
-        // 페러독스 이전 상태로 리셋
-        ResetScene();
+        
+        ResetScene(); // 페러독스 이전 상태로 리셋
 
         // 기록된 모든 패러독스 동시에 재생
         foreach (var paradox in paradoxHistory)
@@ -77,13 +80,8 @@ public class ParadoxManager : MonoBehaviour
 
     private void ResetScene()
     {
-        // 플레이어 위치 초기화
-        GameObject spawn = GameObject.Find("PlayerSpawn");
-        if (spawn != null)
-        {
-            player.transform.position = spawn.transform.position;
-            // Debug.Log($"[Paradox] Player 위치 복원");
-        }
+        // 플레이어 위치 복원 
+        player.transform.position = recordedPlayerPosition;
 
         // 박스 초기 위치로 되돌리기
         foreach (var box in FindObjectsOfType<Box>())
